@@ -1,0 +1,6 @@
+﻿vuln_type,severity,user_input,exploitability
+hardcoded_secret,HIGH,No,HIGH
+eval,HIGH,Yes,HIGH
+subprocess_call,HIGH,Yes,HIGH
+weak_hash,MEDIUM,No,MEDIUM
+print_debug,LOW,No,LOW
