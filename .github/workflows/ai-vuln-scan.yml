@@ -1,0 +1,30 @@
+﻿name: AI-Assisted Security Scan
+
+on: [push]
+
+jobs:
+  ai-security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r ./requirements.txt
+          pip install pandas scikit-learn joblib
+
+      - name: Run Bandit Security Scan
+        run: bandit -r ./demos/vulnerable_app || true
+
+      - name: Train Exploitability ML Model
+        run: python ./ml_model.py
+
+      - name: Predict Exploitability
+        run: python ./predict_exploit.py
