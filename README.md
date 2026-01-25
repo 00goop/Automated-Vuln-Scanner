@@ -1,87 +1,114 @@
-# Automated Vulnerability Scanner (AI-Assisted)
+# 🤖 MR-ROBOT
 
-An end-to-end **AI-assisted vulnerability scanner** that detects Python security issues and predicts their exploitability using machine learning. Integrated into a **CI/CD pipeline** with GitHub Actions for fully automated testing.
+> **Comprehensive Security Toolkit** - Vulnerability Prioritization, Code Analysis, Crypto Tools, OSINT
 
+[![Daily Sync](https://img.shields.io/badge/NVD_Sync-Daily-green)](https://github.com)
+[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-## 🚀 Project Overview
+## 🎯 Overview
 
-This project demonstrates a complete DevSecOps workflow:
+MR-ROBOT is an all-in-one security toolkit that combines:
+- **ML-Powered Vulnerability Prioritization** - AI predicts which CVEs are most likely to be exploited
+- **Code Security Grader** - Upload code, get a security grade (A-F) with detailed findings
+- **Crypto Tools** - Encode/decode, hash identification, cipher operations
+- **OSINT Search** - Domain lookup, IP geolocation, username reconnaissance
 
-1. **Phase 1: Basic Python CI**
-   - Runs a simple Python script to confirm CI is functional.
-   - Demonstrates GitHub Actions integration and automated testing.
+## 🚀 Quick Start
 
-2. **Phase 2: Security Scan CI**
-   - Detects common Python vulnerabilities using [Bandit](https://bandit.readthedocs.io/).
-   - Automates vulnerability scanning for each push to the repository.
-   - Includes a deliberately insecure demo application (`vulnerable_app.py`) to show real findings.
-
-3. **Phase 3: AI-Assisted Exploitability Prediction**
-   - Trains a small machine learning model on sample historical vulnerability data.
-   - Predicts the **exploitability of each finding** from Bandit.
-   - Prioritizes high-risk issues automatically in the CI/CD pipeline.
-
-## ⚙️ Tech Stack
-
-- **Language:** Python 3.10  
-- **CI/CD:** GitHub Actions  
-- **Security Scanning:** Bandit  
-- **Machine Learning:** scikit-learn, pandas, joblib  
-- **Dataset:** Sample CVE-inspired dataset (`ml_data.csv`)  
-
-## 🗂️ Folder Structure
-
-.
-├── demos/
-│   └── vulnerable_app/
-│       └── vulnerable_app.py
-├── .github/
-│   └── workflows/
-│       ├── python-test.yml
-│       ├── security-scan.yml
-│       └── ai-vuln-scan.yml
-├── test.py
-├── requirements.txt
-├── ml_data.csv
-├── ml_model.py
-└── predict_exploit.py
-
-## 🛠️ How to Run Locally
-
-1. Clone the repository:
+### Backend
 
 ```bash
-git clone https://github.com/00goop/Automated-Vuln-Scanner.git
-cd Automated-Vuln-Scanner
-
+cd backend
+py -3 -m venv venv
+.\venv\Scripts\activate
 pip install -r requirements.txt
-pip install pandas scikit-learn joblib
+# Add GEMINI_API_KEY to .env
+python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
+```
 
-python test.py
+### Frontend
 
-bandit -r ./demos/vulnerable_app
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-python ml_model.py
-python predict_exploit.py
+Open **http://localhost:5173** for the dashboard and **http://localhost:8000/docs** for API docs.
 
+## 🛠️ Modules
+
+### 1. Vulnerability Prioritization
+- Fetches CVEs from NVD
+- Uses Random Forest (17 features) to predict exploitation likelihood
+- Priority levels: Critical → High → Moderate → Low → Monitor
+
+### 2. Code Security Grader
+- Upload or paste code
+- Runs Bandit (Python) for security analysis
+- Returns grade A-F with detailed findings
+- Highlights line numbers and severity
+
+### 3. Crypto Tools
+| Tool | Features |
+|------|----------|
+| Decode/Encode | Base64, Hex, URL, ROT13, Binary, Atbash |
+| Hash | MD5, SHA1, SHA256, SHA384, SHA512 |
+| Cipher | Caesar (all shifts), XOR, Reverse |
+
+### 4. OSINT Search
+- **Domain Lookup**: WHOIS, DNS records, IP resolution
+- **IP Lookup**: Geolocation, ISP, reverse DNS
+- **Username Search**: Check 15+ platforms (GitHub, Twitter, etc.)
+- **Subdomain Enum**: Find subdomains using common prefixes
+
+## 📡 API Endpoints
+
+| Category | Endpoint | Method |
+|----------|----------|--------|
+| Health | `/api/health` | GET |
+| Vulnerabilities | `/api/predict` | POST |
+| Code Analysis | `/api/analyze/code` | POST |
+| Crypto | `/api/crypto/decode` | POST |
+| Crypto | `/api/crypto/encode` | POST |
+| Crypto | `/api/crypto/identify-hash` | POST |
+| OSINT | `/api/osint/domain/{domain}` | GET |
+| OSINT | `/api/osint/ip/{ip}` | GET |
+| OSINT | `/api/osint/username/{username}` | GET |
+| Chat | `/api/chat` | POST |
+
+## 🔑 Environment Variables
+
+```env
+GEMINI_API_KEY=your_key_here    # Required for AI chat
+NVD_API_KEY=optional           # Faster NVD data sync
+DEBUG=true                      # Development mode
+```
+
+## 📁 Project Structure
+
+```
+MR-ROBOT/
+├── backend/
+│   ├── api/
+│   │   ├── main.py           # FastAPI routes
+│   │   ├── chatbot.py        # Gemini AI assistant
+│   │   ├── code_analysis.py  # Bandit integration
+│   │   ├── crypto_tools.py   # Encoding/hashing
+│   │   └── osint_tools.py    # OSINT features
+│   ├── ml/                   # ML pipeline
+│   └── data/                 # NVD data
+├── frontend/
+│   └── src/
+│       ├── App.jsx          # React dashboard
+│       └── index.css        # Styling
+└── .github/workflows/       # CI/CD
+```
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-## **6. Features**
-
-```markdown
-## 🎯 Features
-
-- ✅ Automated Python CI workflow  
-- ✅ Security scanning with Bandit  
-- ✅ AI-assisted exploitability prediction  
-- ✅ Fully integrated CI/CD pipeline with GitHub Actions  
-- ✅ Prioritization of high-risk vulnerabilities  
-
-## 📈 CI/CD Integration
-
-Three workflows are included:
-
-1. **Python Test CI:** Ensures basic scripts run on push.  
-2. **Security Scan CI:** Detects Python security issues automatically.  
-3. **AI-Assisted Security Scan:** Runs Bandit, trains ML model, and predicts exploitability in a single workflow.  
+Built with 🤖 by security enthusiasts.

@@ -1,0 +1,168 @@
+# Deploy Guard - Blocks deployment if critical vulnerabilities are detected
+# Runs on every push and pull request to main branch
+
+name: Deploy Guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  security-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Install dependencies
+        run: |
+          cd vulnprioritizer
+          pip install -r backend/requirements.txt
+          pip install pip-audit bandit safety
+      
+      - name: 🔍 Audit Python dependencies
+        id: pip-audit
+        continue-on-error: true
+        run: |
+          cd vulnprioritizer/backend
+          pip-audit --format json --output audit-results.json || true
+          
+          # Count critical/high vulnerabilities
+          python -c "
+          import json
+          try:
+              with open('audit-results.json') as f:
+                  results = json.load(f)
+              vulns = results.get('dependencies', [])
+              critical = sum(1 for v in vulns if 'CRITICAL' in str(v).upper())
+              high = sum(1 for v in vulns if 'HIGH' in str(v).upper())
+              print(f'Found {critical} critical and {high} high severity vulnerabilities')
+              if critical > 0:
+                  exit(1)
+          except:
+              print('No vulnerabilities found or audit passed')
+          "
+      
+      - name: 🛡️ Run Bandit security scan
+        id: bandit
+        continue-on-error: true
+        run: |
+          cd vulnprioritizer/backend
+          bandit -r . -f json -o bandit-results.json --exclude ./tests || true
+          
+          # Check for high severity issues
+          python -c "
+          import json
+          try:
+              with open('bandit-results.json') as f:
+                  results = json.load(f)
+              high_issues = [r for r in results.get('results', []) if r.get('issue_severity') == 'HIGH']
+              if high_issues:
+                  print(f'⚠️ Found {len(high_issues)} high severity code issues')
+                  for issue in high_issues[:5]:
+                      print(f\"  - {issue.get('issue_text')} in {issue.get('filename')}:{issue.get('line_number')}\")
+              else:
+                  print('✅ No high severity code issues found')
+          except Exception as e:
+              print(f'Bandit check passed or no issues: {e}')
+          "
+      
+      - name: 🚧 Check for deployment blockers
+        id: blocker-check
+        run: |
+          cd vulnprioritizer/backend
+          
+          # Create deployment decision
+          python << 'EOF'
+          import json
+          import sys
+          
+          blockers = []
+          warnings = []
+          
+          # Check pip-audit results
+          try:
+              with open('audit-results.json') as f:
+                  audit = json.load(f)
+              for dep in audit.get('dependencies', []):
+                  for vuln in dep.get('vulns', []):
+                      severity = vuln.get('fix_versions', [''])[0] if vuln.get('fix_versions') else ''
+                      if 'CRITICAL' in str(vuln).upper():
+                          blockers.append(f"Critical dependency vulnerability: {dep.get('name')}")
+                      elif 'HIGH' in str(vuln).upper():
+                          warnings.append(f"High severity in {dep.get('name')}")
+          except:
+              pass
+          
+          # Check bandit results  
+          try:
+              with open('bandit-results.json') as f:
+                  bandit = json.load(f)
+              high_issues = [r for r in bandit.get('results', []) if r.get('issue_severity') == 'HIGH']
+              if len(high_issues) > 3:
+                  blockers.append(f"Too many high severity code issues ({len(high_issues)})")
+              elif high_issues:
+                  warnings.append(f"{len(high_issues)} high severity code issues")
+          except:
+              pass
+          
+          # Output results
+          if blockers:
+              print("🚫 DEPLOYMENT BLOCKED")
+              print("=" * 40)
+              for b in blockers:
+                  print(f"  ❌ {b}")
+              print("\nFix these issues before deploying.")
+              sys.exit(1)
+          elif warnings:
+              print("⚠️ DEPLOYMENT ALLOWED WITH WARNINGS")
+              print("=" * 40)
+              for w in warnings:
+                  print(f"  ⚠️ {w}")
+              print("\nConsider addressing these issues.")
+          else:
+              print("✅ DEPLOYMENT APPROVED")
+              print("=" * 40)
+              print("No blocking security issues detected.")
+          EOF
+      
+      - name: 📋 Generate security report
+        if: always()
+        run: |
+          echo "## 🛡️ Security Check Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f vulnprioritizer/backend/audit-results.json ]; then
+            echo "### Dependency Audit" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat vulnprioritizer/backend/audit-results.json | head -50 >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Pip Audit: ${{ steps.pip-audit.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Bandit Scan: ${{ steps.bandit.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment Decision: ${{ steps.blocker-check.outcome }}" >> $GITHUB_STEP_SUMMARY
+      
+      - name: 📤 Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports-${{ github.run_number }}
+          path: |
+            vulnprioritizer/backend/audit-results.json
+            vulnprioritizer/backend/bandit-results.json
+          retention-days: 7

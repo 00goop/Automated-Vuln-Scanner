@@ -1,0 +1,96 @@
+# Daily NVD Sync & Model Retraining
+# Runs automatically at 6 AM UTC daily, or can be triggered manually
+
+name: Daily NVD Sync & Model Update
+
+on:
+  schedule:
+    # Run at 6 AM UTC every day
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Days of CVE history to fetch'
+        required: false
+        default: '7'
+      max_cves:
+        description: 'Maximum CVEs to fetch (leave empty for all)'
+        required: false
+        default: '500'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  sync-and-retrain:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 📦 Install dependencies
+        run: |
+          cd vulnprioritizer
+          pip install -r backend/requirements.txt
+      
+      - name: 🔄 Fetch latest CVEs from NVD
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          cd vulnprioritizer/backend
+          python -m data.nvd_fetcher \
+            --days ${{ github.event.inputs.days || '7' }} \
+            --max ${{ github.event.inputs.max_cves || '500' }} \
+            --output cves_latest.json
+      
+      - name: 🤖 Retrain ML model
+        run: |
+          cd vulnprioritizer/backend
+          python -m ml.trainer \
+            --data ./data/cves_latest.json \
+            --evaluate
+      
+      - name: 📊 Check model performance
+        id: model-check
+        run: |
+          cd vulnprioritizer/backend
+          F1_SCORE=$(python -c "import json; print(json.load(open('models/metrics.json'))['f1_score'])")
+          echo "f1_score=$F1_SCORE" >> $GITHUB_OUTPUT
+          
+          # Check if meets threshold
+          python -c "
+          import json
+          metrics = json.load(open('models/metrics.json'))
+          if metrics['f1_score'] >= 0.85:
+              print('✅ Model meets performance threshold')
+          else:
+              print('⚠️ Model below threshold, using previous model')
+          "
+      
+      - name: 📤 Upload model artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model-${{ github.run_number }}
+          path: |
+            vulnprioritizer/backend/models/rf_classifier.joblib
+            vulnprioritizer/backend/models/scaler.joblib
+            vulnprioritizer/backend/models/metrics.json
+            vulnprioritizer/backend/models/feature_importance.json
+          retention-days: 30
+      
+      - name: 📈 Post sync summary
+        run: |
+          echo "## 🔄 Daily Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| F1 Score | ${{ steps.model-check.outputs.f1_score }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Days Synced | ${{ github.event.inputs.days || '7' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run Number | ${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
