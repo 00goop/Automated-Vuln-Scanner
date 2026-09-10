@@ -32,7 +32,7 @@ class NVDFetcher:
         self,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-        days_back: int = 365,
+        days_back: int = 7,
         max_results: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -47,6 +47,8 @@ class NVDFetcher:
         Returns:
             List of CVE records
         """
+        if not 1 <= days_back <= 120 or (max_results is not None and max_results < 1):
+            raise ValueError('days_back must be 1..120 and max_results must be positive')
         if end_date is None:
             end_date = datetime.now()
         if start_date is None:
@@ -89,6 +91,10 @@ class NVDFetcher:
                     
                     logger.info(f"Fetched {len(all_cves)}/{total_results} CVEs")
                     
+                    if max_results is not None and len(all_cves) >= max_results:
+                        all_cves = all_cves[:max_results]
+                        break
+
                     # Check if we have all results
                     if start_index + self.RESULTS_PER_PAGE >= total_results:
                         break
@@ -102,11 +108,9 @@ class NVDFetcher:
                     await asyncio.sleep(self.request_delay)
                     
                 except httpx.HTTPError as e:
-                    logger.error(f"HTTP error fetching CVEs: {e}")
-                    break
+                    raise RuntimeError("NVD fetch failed; partial data was not saved") from e
                 except Exception as e:
-                    logger.error(f"Error fetching CVEs: {e}")
-                    break
+                    raise RuntimeError("Invalid NVD response; partial data was not saved") from e
         
         logger.info(f"Total CVEs fetched: {len(all_cves)}")
         return all_cves
@@ -115,6 +119,8 @@ class NVDFetcher:
         """Parse a CVE record into a normalized format."""
         try:
             cve_id = cve_data.get("id", "")
+            if not cve_id:
+                return None
             
             # Get descriptions (prefer English)
             descriptions = cve_data.get("descriptions", [])
@@ -182,7 +188,7 @@ class NVDFetcher:
     def _extract_cvss(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
         """Extract CVSS data, preferring newer versions."""
         # Try CVSS 3.1
-        if "cvssMetricV31" in metrics:
+        if metrics.get("cvssMetricV31"):
             metric = metrics["cvssMetricV31"][0]
             cvss = metric.get("cvssData", {})
             return {
@@ -201,7 +207,7 @@ class NVDFetcher:
             }
         
         # Try CVSS 3.0
-        if "cvssMetricV30" in metrics:
+        if metrics.get("cvssMetricV30"):
             metric = metrics["cvssMetricV30"][0]
             cvss = metric.get("cvssData", {})
             return {
@@ -220,7 +226,7 @@ class NVDFetcher:
             }
         
         # Fallback to CVSS 2.0
-        if "cvssMetricV2" in metrics:
+        if metrics.get("cvssMetricV2"):
             metric = metrics["cvssMetricV2"][0]
             cvss = metric.get("cvssData", {})
             return {
@@ -283,7 +289,7 @@ if __name__ == "__main__":
     load_dotenv()
     
     parser = argparse.ArgumentParser(description="Fetch CVE data from NVD")
-    parser.add_argument("--days", type=int, default=365, help="Days of history to fetch")
+    parser.add_argument("--days", type=int, default=7, help="Days of history to fetch")
     parser.add_argument("--max", type=int, default=None, help="Maximum CVEs to fetch")
     parser.add_argument("--output", type=str, default="cves.json", help="Output filename")
     args = parser.parse_args()
@@ -295,6 +301,8 @@ if __name__ == "__main__":
     
     async def main():
         cves = await fetcher.fetch_cves(days_back=args.days, max_results=args.max)
+        if not cves:
+            raise RuntimeError('NVD returned no usable CVEs')
         await fetcher.save_to_json(cves, args.output)
     
     asyncio.run(main())

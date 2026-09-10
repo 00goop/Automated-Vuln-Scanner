@@ -2,13 +2,11 @@
 
 > **Comprehensive Security Toolkit** - Vulnerability Prioritization, Code Analysis, Crypto Tools, OSINT
 
-[![Daily Sync](https://img.shields.io/badge/NVD_Sync-Daily-green)](https://github.com)
-[![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
 ## 🎯 Overview
 
 MR-ROBOT is an all-in-one security toolkit that combines:
-- **ML-Powered Vulnerability Prioritization** - AI predicts which CVEs are most likely to be exploited
+- **ML-Powered Vulnerability Prioritization** - experimental CVE ranking; no validated exploitation prediction claim
 - **Code Security Grader** - Upload code, get a security grade (A-F) with detailed findings
 - **Crypto Tools** - Encode/decode, hash identification, cipher operations
 - **OSINT Search** - Domain lookup, IP geolocation, username reconnaissance
@@ -40,7 +38,7 @@ Open **http://localhost:5173** for the dashboard and **http://localhost:8000/doc
 
 ### 1. Vulnerability Prioritization
 - Fetches CVEs from NVD
-- Uses Random Forest (17 features) to predict exploitation likelihood
+- Uses a seeded Random Forest experiment with nine retained features and an explicit baseline
 - Priority levels: Critical → High → Moderate → Low → Monitor
 
 ### 2. Code Security Grader
@@ -112,3 +110,33 @@ MIT License - see [LICENSE](LICENSE) for details.
 ---
 
 Built with 🤖 by security enthusiasts.
+
+## Evaluation and verification
+
+See [model methodology](docs/model-card.md) and [CI policy](docs/ci-policy.md).
+Synthetic labels are not observed exploitation outcomes. The daily workflow stores
+experiments without promoting a model or claiming real-world F1 performance.
+
+```bash
+python -m pip install -r backend/requirements-ml.txt pytest pytest-asyncio
+python -m pytest backend/tests -q
+cd frontend
+npm ci
+npm run lint
+npm run build
+```
+
+Frontend deployment uses `frontend/.env.example` (`VITE_API_BASE_URL`). Set backend
+`CORS_ORIGINS` to the deployed frontend origin. Provider keys stay in the backend.
+The API cache is process-local; a restart clears analyzed vulnerabilities. Dashboard
+API failures are shown explicitly and do not substitute invented security scores.
+The distinct code, crypto, OSINT and chat screens live in `frontend/src/components/`;
+their shared HTTP client lives in `frontend/src/services/api.js`.
+
+## Ownership and limitations
+
+Personal project maintained by Guttu Abajebel. This repository demonstrates security
+tool integration and experimental ML evaluation, not a certified security audit.
+The deployment check must be configured as required by branch protection/hosting
+before it can gate an external release. Public deployment additionally needs
+authentication, request quotas and review of outbound OSINT network access.

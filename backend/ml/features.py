@@ -87,7 +87,8 @@ class FeatureEngineer:
         'other': []  # Catch-all
     }
     
-    def __init__(self):
+    def __init__(self, as_of=None):
+        self.as_of = as_of or datetime.now().astimezone()
         self.feature_names = [
             'cvss_base_score',
             'cvss_exploitability_score',
@@ -118,19 +119,22 @@ class FeatureEngineer:
         Returns:
             DataFrame with engineered features
         """
+        if not isinstance(cves, list):
+            raise ValueError('CVEs must be a list')
         logger.info(f"Engineering features for {len(cves)} CVEs")
         
         features = []
         for cve in cves:
+            if not isinstance(cve, dict):
+                raise ValueError('Each CVE must be an object')
             try:
                 feature_row = self._engineer_single_cve(cve)
                 feature_row['cve_id'] = cve.get('cve_id', '')
                 features.append(feature_row)
             except Exception as e:
-                logger.warning(f"Error engineering features for {cve.get('cve_id')}: {e}")
-                continue
+                raise ValueError('Malformed CVE features') from e
         
-        df = pd.DataFrame(features)
+        df = pd.DataFrame(features, columns=[*self.feature_names, 'cve_id'])
         
         # Fill missing values with sensible defaults
         df = self._fill_missing_values(df)
@@ -143,9 +147,9 @@ class FeatureEngineer:
         features = {}
         
         # 1-3: CVSS Scores (direct)
-        features['cvss_base_score'] = cve.get('cvss_base_score') or 5.0
-        features['cvss_exploitability_score'] = cve.get('cvss_exploitability_score') or 2.0
-        features['cvss_impact_score'] = cve.get('cvss_impact_score') or 2.0
+        features['cvss_base_score'] = 5.0 if cve.get('cvss_base_score') is None else cve['cvss_base_score']
+        features['cvss_exploitability_score'] = 2.0 if cve.get('cvss_exploitability_score') is None else cve['cvss_exploitability_score']
+        features['cvss_impact_score'] = 2.0 if cve.get('cvss_impact_score') is None else cve['cvss_impact_score']
         
         # 4-7: Attack characteristics (encoded)
         features['attack_vector_encoded'] = self.ATTACK_VECTOR_MAP.get(
@@ -177,8 +181,8 @@ class FeatureEngineer:
         if published:
             try:
                 pub_date = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                features['days_since_published'] = (datetime.now(pub_date.tzinfo) - pub_date).days
-            except:
+                features['days_since_published'] = max(0, (self.as_of.replace(tzinfo=None) - pub_date.replace(tzinfo=None)).days)
+            except (ValueError, TypeError):
                 features['days_since_published'] = 365  # Default to 1 year
         else:
             features['days_since_published'] = 365
@@ -284,7 +288,7 @@ class FeatureEngineer:
         
         for col, default in defaults.items():
             if col in df.columns:
-                df[col] = df[col].fillna(default)
+                df[col] = pd.to_numeric(df[col], errors='coerce').replace([np.inf, -np.inf], np.nan).fillna(default)
         
         return df
     
