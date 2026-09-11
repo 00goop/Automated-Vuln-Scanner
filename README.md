@@ -1,17 +1,30 @@
-# 🤖 MR-ROBOT
+# MR-ROBOT
 
-> **Comprehensive Security Toolkit** - Vulnerability Prioritization, Code Analysis, Crypto Tools, OSINT
+**A defensive security workbench for turning scattered signals into an inspectable review queue.**
 
+MR-ROBOT brings CVE prioritization, Python static analysis, data transforms, and
+open-source intelligence into one FastAPI and React workspace. The interface is
+deliberately terse and operational: it identifies its data sources, reports when the
+API is unavailable, and keeps experimental model output separate from verified facts.
 
-## 🎯 Overview
+| Module | What it does | Evidence source |
+| --- | --- | --- |
+| Vulnerability triage | Ranks CVEs and explains priority factors | NVD records + seeded Random Forest experiment |
+| Source inspection | Grades pasted or uploaded Python | Bandit findings with severity and line context |
+| Crypto tools | Encodes, decodes, hashes, and identifies input | Deterministic local transforms |
+| OSINT | Looks up public domain, IP, and username signals | Explicit outbound queries from the API |
 
-MR-ROBOT is an all-in-one security toolkit that combines:
-- **ML-Powered Vulnerability Prioritization** - experimental CVE ranking; no validated exploitation prediction claim
-- **Code Security Grader** - Upload code, get a security grade (A-F) with detailed findings
-- **Crypto Tools** - Encode/decode, hash identification, cipher operations
-- **OSINT Search** - Domain lookup, IP geolocation, username reconnaissance
+> The prioritizer is an engineering experiment trained on deterministic synthetic
+> labels. Its score is a triage aid, not a validated probability of exploitation.
 
-## 🚀 Quick Start
+## Why this project exists
+
+Security data is often presented as either raw output or an unexplained score.
+MR-ROBOT makes the path between those two states visible. A reviewer can inspect the
+source record, the retained features, the baseline comparison, and the limitations in
+the [model card](docs/model-card.md).
+
+## Quick start
 
 ### Backend
 
@@ -20,7 +33,7 @@ cd backend
 py -3 -m venv venv
 .\venv\Scripts\activate
 pip install -r requirements.txt
-# Add GEMINI_API_KEY to .env
+# GEMINI_API_KEY is optional and enables the assistant panel
 python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -34,7 +47,7 @@ npm run dev
 
 Open **http://localhost:5173** for the dashboard and **http://localhost:8000/docs** for API docs.
 
-## 🛠️ Modules
+## Modules
 
 ### 1. Vulnerability Prioritization
 - Fetches CVEs from NVD
@@ -60,7 +73,7 @@ Open **http://localhost:5173** for the dashboard and **http://localhost:8000/doc
 - **Username Search**: Check 15+ platforms (GitHub, Twitter, etc.)
 - **Subdomain Enum**: Find subdomains using common prefixes
 
-## 📡 API Endpoints
+## API endpoints
 
 | Category | Endpoint | Method |
 |----------|----------|--------|
@@ -75,7 +88,7 @@ Open **http://localhost:5173** for the dashboard and **http://localhost:8000/doc
 | OSINT | `/api/osint/username/{username}` | GET |
 | Chat | `/api/chat` | POST |
 
-## 🔑 Environment Variables
+## Environment variables
 
 ```env
 GEMINI_API_KEY=your_key_here    # Required for AI chat
@@ -83,7 +96,7 @@ NVD_API_KEY=optional           # Faster NVD data sync
 DEBUG=true                      # Development mode
 ```
 
-## 📁 Project Structure
+## Project structure
 
 ```
 MR-ROBOT/
@@ -98,18 +111,18 @@ MR-ROBOT/
 │   └── data/                 # NVD data
 ├── frontend/
 │   └── src/
-│       ├── App.jsx          # React dashboard
-│       └── index.css        # Styling
+│       ├── App.jsx          # Workbench shell and CVE queue
+│       ├── components/      # Code, crypto, OSINT, and chat modules
+│       ├── services/        # Shared API client
+│       └── index.css        # Responsive console visual system
 └── .github/workflows/       # CI/CD
 ```
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
 ---
-
-Built with 🤖 by security enthusiasts.
 
 ## Evaluation and verification
 

@@ -4,16 +4,15 @@ import CryptoToolsView from './components/CryptoToolsView';
 import CodeAnalysisView from './components/CodeAnalysisView';
 import { useState, useEffect } from 'react';
 import {
-  Shield, Home, AlertTriangle, FileText, Settings,
-  MessageCircle, Send, TrendingUp, RefreshCw, X,
-  ChevronRight, Clock, Zap, Code, Lock, Search,
-  Upload, Hash, Globe, User, Terminal
+  Home, AlertTriangle, Settings,
+  MessageCircle, TrendingUp, ChevronRight, Code, Lock, Search,
+  Terminal, Database, Activity
 } from 'lucide-react';
 import { api } from './services/api';
 import './index.css';
 
 // Sidebar Navigation
-function Sidebar({ activeView, setActiveView, criticalCount }) {
+function Sidebar({ activeView, setActiveView, criticalCount, connectionError, loading }) {
   const navItems = [
     { id: 'dashboard', icon: Home, label: 'Dashboard' },
     { id: 'vulnerabilities', icon: AlertTriangle, label: 'Vulnerabilities', badge: criticalCount },
@@ -27,11 +26,11 @@ function Sidebar({ activeView, setActiveView, criticalCount }) {
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-icon">
-          <Terminal size={24} color="white" />
+          <Terminal size={22} />
         </div>
         <div>
-          <div className="brand-name">MR-ROBOT</div>
-          <div className="brand-tagline">Security Toolkit</div>
+          <div className="brand-name">MR.<span>ROBOT</span></div>
+          <div className="brand-tagline">Defensive workbench</div>
         </div>
       </div>
 
@@ -55,8 +54,8 @@ function Sidebar({ activeView, setActiveView, criticalCount }) {
       </nav>
 
       <div className="sync-status">
-        <div className="sync-dot" />
-        <span>MR-ROBOT v2.0</span>
+        <div className={`sync-dot ${connectionError ? 'offline' : ''}`} />
+        <span>{connectionError ? 'API DISCONNECTED' : loading ? 'NEGOTIATING LINK' : 'SYSTEM READY'}</span>
       </div>
     </aside>
   );
@@ -66,14 +65,15 @@ function Sidebar({ activeView, setActiveView, criticalCount }) {
 function SecurityScoreHero({ score }) {
   return (
     <div className="security-score-hero">
-      <div className="security-score-value">{score?.score || '--'}</div>
+      <div className="panel-index">01 // PRIORITY SIGNAL</div>
+      <div className="security-score-value">{score?.score ?? '--'}</div>
       <div className="security-score-label">
-        Security Score • {score?.label || 'Loading...'}
+        Experimental security score / {score?.label || 'Awaiting data'}
       </div>
       {score?.score > 0 && (
         <div className="security-score-trend">
           <TrendingUp size={16} />
-          Keep improving by fixing high-priority items
+          Review high-priority evidence first
         </div>
       )}
     </div>
@@ -113,39 +113,93 @@ function PriorityBreakdown({ breakdown }) {
 
 
 // Dashboard View with quick access cards
-function DashboardView({ securityScore, setActiveView }) {
+function DashboardView({ securityScore, setActiveView, connectionError, loading, vulnerabilityCount }) {
   const quickActions = [
-    { id: 'code-analysis', icon: Code, title: 'Code Grader', desc: 'Upload & analyze code', color: '#8b5cf6' },
-    { id: 'crypto', icon: Lock, title: 'Crypto Tools', desc: 'Encode, decode, hash', color: '#06b6d4' },
-    { id: 'osint', icon: Search, title: 'OSINT', desc: 'Domain & user recon', color: '#f97316' },
-    { id: 'vulnerabilities', icon: AlertTriangle, title: 'Vulnerabilities', desc: 'CVE prioritization', color: '#ef4444' },
+    { id: 'vulnerabilities', icon: AlertTriangle, title: 'Prioritize CVEs', desc: 'Rank NVD records with inspectable context' },
+    { id: 'code-analysis', icon: Code, title: 'Inspect Source', desc: 'Run Bandit-backed Python static analysis' },
+    { id: 'crypto', icon: Lock, title: 'Transform Data', desc: 'Encode, decode, hash, and verify input' },
+    { id: 'osint', icon: Search, title: 'Trace Indicators', desc: 'Inspect public domain and username signals' },
   ];
 
   return (
     <>
+      <section className="command-hero">
+        <div className="hero-copy">
+          <p className="terminal-path">root@mr-robot:~/operations<span aria-hidden="true">$</span></p>
+          <h2>See the signal.<br /><em>Verify the evidence.</em></h2>
+          <p className="hero-summary">A focused defensive workspace for CVE triage, source inspection, data transforms, and open-source intelligence.</p>
+          <div className="hero-actions">
+            <button className="command-button primary" onClick={() => setActiveView('vulnerabilities')}>Review CVE queue <ChevronRight size={16} /></button>
+            <button className="command-button" onClick={() => setActiveView('code-analysis')}>Inspect source</button>
+          </div>
+        </div>
+        <div className="truth-panel" aria-label="System capabilities">
+          <div className="panel-index">00 // SYSTEM TRUTH</div>
+          <dl>
+            <div><dt>API link</dt><dd className={connectionError ? 'signal-bad' : 'signal-good'}>{connectionError ? 'offline' : loading ? 'connecting' : 'ready'}</dd></div>
+            <div><dt>CVE source</dt><dd>NVD feed</dd></div>
+            <div><dt>ML mode</dt><dd>deterministic experiment</dd></div>
+            <div><dt>Static scan</dt><dd>Bandit</dd></div>
+            <div><dt>Records loaded</dt><dd>{connectionError ? '—' : vulnerabilityCount}</dd></div>
+          </dl>
+          <p>Outputs support triage. They do not replace validation or exploitability review.</p>
+        </div>
+      </section>
+
       {securityScore && <SecurityScoreHero score={securityScore} />}
       {securityScore && <PriorityBreakdown breakdown={securityScore.breakdown} />}
 
       <section className="fix-first-section">
         <div className="section-header">
-          <h2 className="section-title">🛠️ Security Toolkit</h2>
+          <div><p className="panel-index">02 // MODULE INDEX</p><h2 className="section-title">Choose an operation</h2></div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-          {quickActions.map(action => (
+        <div className="module-grid">
+          {quickActions.map((action, index) => (
             <button
               key={action.id}
-              className="priority-card"
-              style={{ borderLeftColor: action.color, cursor: 'pointer', textAlign: 'left', color: 'inherit' }}
+              className="module-card"
               onClick={() => setActiveView(action.id)}
             >
-              <action.icon size={32} color={action.color} style={{ marginBottom: '8px' }} />
-              <div className="priority-card-count" style={{ fontSize: '1.2rem' }}>{action.title}</div>
-              <div className="priority-card-label">{action.desc}</div>
+              <div className="module-card-top"><span>0{index + 1}</span><action.icon size={20} /></div>
+              <strong>{action.title}</strong>
+              <p>{action.desc}</p>
+              <span className="module-open">OPEN MODULE <ChevronRight size={14} /></span>
             </button>
           ))}
         </div>
       </section>
     </>
+  );
+}
+
+function VulnerabilitiesView({ vulnerabilities }) {
+  const priorityClass = (label = '') => label.toLowerCase().split(' ')[0];
+
+  return (
+    <section className="fix-first-section">
+      <div className="section-header">
+        <div><p className="panel-index">QUEUE // NVD RECORDS</p><h2 className="section-title">Vulnerability triage</h2></div>
+        <span className="record-count">{vulnerabilities.length} ANALYZED</span>
+      </div>
+      {!vulnerabilities.length ? (
+        <div className="terminal-empty"><Database size={24} /><strong>No records loaded.</strong><p>Start the API and sync the NVD dataset to build a review queue.</p></div>
+      ) : (
+        <div className="vuln-list">
+          {vulnerabilities.slice(0, 30).map((vulnerability) => (
+            <article className="vuln-card" key={vulnerability.cve_id}>
+              <div className="vuln-content">
+                <div className="vuln-header">
+                  <span className="vuln-id">{vulnerability.cve_id}</span>
+                  <span className={`vuln-priority-label ${priorityClass(vulnerability.priority_level)}`}>{vulnerability.priority_level || 'Unclassified'}</span>
+                </div>
+                <p className="vuln-description">{vulnerability.description || 'No NVD description available.'}</p>
+                <div className="vuln-metadata"><span>CVSS {vulnerability.cvss_base_score ?? '—'}</span><span>MODEL {Math.round((vulnerability.exploitation_probability || 0) * 100)}%</span></div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -180,25 +234,27 @@ function App() {
   }, []);
 
   const criticalCount = vulnerabilities.filter(v => v.priority_level === 'Critical Priority').length;
+  const viewTitles = {
+    dashboard: ['OPERATIONS', 'Defensive operations'],
+    vulnerabilities: ['TRIAGE', 'Vulnerability queue'],
+    'code-analysis': ['SOURCE', 'Static analysis'],
+    crypto: ['TRANSFORM', 'Cryptographic tools'],
+    osint: ['RECON', 'Open-source intelligence'],
+    settings: ['SYSTEM', 'Workbench settings'],
+  };
+  const [viewCode, viewTitle] = viewTitles[activeView];
 
   return (
     <div className="app-container">
       <a className="skip-link" href="#main-content">Skip to content</a>
-      <Sidebar activeView={activeView} setActiveView={setActiveView} criticalCount={criticalCount} />
+      <Sidebar activeView={activeView} setActiveView={setActiveView} criticalCount={criticalCount} connectionError={connectionError} loading={loading} />
 
       <main className="main-content" id="main-content">
-        <header className="workspace-heading"><div><p className="eyebrow">MR-ROBOT / SECURITY WORKBENCH</p><h1>Understand the signal.</h1><p>Inspect code, investigate indicators, and prioritize with context.</p></div><span className="environment-label">{connectionError ? 'API offline' : loading ? 'Connecting' : 'Local workspace'}</span></header>
-        <p className="methodology-note">Priority scores are experimental indicators, not validated exploitation probabilities.</p>
+        <header className="workspace-heading"><div><p className="eyebrow">MR.ROBOT // {viewCode}</p><h1>{viewTitle}</h1></div><span className={`environment-label ${connectionError ? 'offline' : ''}`}><Activity size={13} />{connectionError ? 'API OFFLINE' : loading ? 'CONNECTING' : 'LOCAL / READY'}</span></header>
         {loading && <p role="status">Connecting to your security workspace…</p>}
         {connectionError && <div className="connection-notice" role="alert">The API is unavailable. Start the backend and refresh to load your data. No sample security results are displayed.</div>}
-        {activeView === 'dashboard' && <DashboardView securityScore={securityScore} setActiveView={setActiveView} />}
-        {activeView === 'vulnerabilities' && (
-          <section className="fix-first-section">
-            <h2 className="section-title">Vulnerabilities</h2>
-            <p className="section-subtitle">{vulnerabilities.length} CVEs analyzed</p>
-            {!vulnerabilities.length && <p className="empty-state">No CVEs have been analyzed in this session yet.</p>}
-          </section>
-        )}
+        {activeView === 'dashboard' && <DashboardView securityScore={securityScore} setActiveView={setActiveView} connectionError={connectionError} loading={loading} vulnerabilityCount={vulnerabilities.length} />}
+        {activeView === 'vulnerabilities' && <VulnerabilitiesView vulnerabilities={vulnerabilities} />}
         {activeView === 'code-analysis' && <CodeAnalysisView />}
         {activeView === 'crypto' && <CryptoToolsView />}
         {activeView === 'osint' && <OsintView />}
