@@ -4,6 +4,7 @@ Comprehensive Security Toolkit: Vulnerability Prioritization, Code Analysis, Cry
 """
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import asyncio
@@ -61,16 +62,16 @@ class HealthResponse(BaseModel):
 
 
 class VulnerabilityInput(BaseModel):
-    cve_id: str
+    cve_id: str = Field(min_length=1, max_length=64)
     description: Optional[str] = None
-    cvss_base_score: Optional[float] = None
+    cvss_base_score: Optional[float] = Field(default=None, ge=0, le=10)
     attack_vector: Optional[str] = None
     has_patch: Optional[bool] = False
     has_exploit: Optional[bool] = False
 
 
 class CodeAnalysisRequest(BaseModel):
-    code: str
+    code: str = Field(min_length=1, max_length=100000)
     filename: str = "code.py"
     language: Optional[str] = None
 
@@ -87,7 +88,7 @@ class HashRequest(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=4000)
     context: Optional[Dict[str, Any]] = None
 
 
@@ -181,7 +182,9 @@ async def analyze_uploaded_file(file: UploadFile = File(...)):
     """
     Upload a file for security analysis.
     """
-    content = await file.read()
+    content = await file.read(100001)
+    if len(content) > 100000:
+        raise HTTPException(413, 'File exceeds 100 KB limit')
     try:
         code = content.decode('utf-8')
     except UnicodeDecodeError:
@@ -295,7 +298,9 @@ async def chat_with_shield(message: ChatMessage):
     if 'security_score' not in context and vulnerability_cache:
         predictions = list(vulnerability_cache.values())
         context['security_score'] = predictor.calculate_security_score(predictions)
-    response = chatbot.chat(message.message, context)
+    # Per-request assistant avoids sharing conversation state across users.
+    assistant = ShieldChatbot(api_key=settings.gemini_api_key)
+    response = await run_in_threadpool(assistant.chat, message.message, context)
     return response
 
 
@@ -320,7 +325,7 @@ async def get_sync_status():
 
 
 @app.post("/api/sync/trigger")
-async def trigger_sync(background_tasks: BackgroundTasks, days: int = Query(7, ge=1, le=365)):
+async def trigger_sync(background_tasks: BackgroundTasks, days: int = Query(7, ge=1, le=120)):
     """Trigger background NVD sync."""
     if sync_status["status"] == "running":
         raise HTTPException(status_code=409, detail="Sync already in progress")
@@ -346,7 +351,7 @@ async def run_sync(days: int):
         sync_status["cve_count"] = len(cves)
         sync_status["status"] = "completed"
     except Exception as e:
-        sync_status["status"] = f"error: {str(e)}"
+        sync_status["status"] = "error"
 
 
 # ============================================================================

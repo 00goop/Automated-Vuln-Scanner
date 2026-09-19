@@ -181,9 +181,9 @@ class CryptoTools:
         
         try:
             if algorithm == 'md5':
-                result = hashlib.md5(text.encode()).hexdigest()
+                result = hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()
             elif algorithm == 'sha1':
-                result = hashlib.sha1(text.encode()).hexdigest()
+                result = hashlib.sha1(text.encode(), usedforsecurity=False).hexdigest()
             elif algorithm == 'sha256':
                 result = hashlib.sha256(text.encode()).hexdigest()
             elif algorithm == 'sha384':

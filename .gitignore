@@ -133,3 +133,8 @@ Thumbs.db
 
 # Security scan results
 *-results.json
+
+backend/experiments/
+backend/uploads/
+uploads/
+backend/data/cves_latest.json

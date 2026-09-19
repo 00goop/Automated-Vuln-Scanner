@@ -2,7 +2,8 @@
 Gemini-powered Security Chatbot
 "Shield" - Your AI security assistant with expertise-adaptive responses.
 """
-import google.generativeai as genai
+import httpx
+import os
 from typing import List, Dict, Optional, Any
 import json
 import logging
@@ -67,16 +68,7 @@ class ShieldChatbot:
     def _initialize_model(self):
         """Initialize Gemini model."""
         try:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
-                generation_config={
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "max_output_tokens": 1024,
-                }
-            )
-            self.chat_session = self.model.start_chat(history=[])
+            self.model = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
             logger.info("Gemini model initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Gemini model: {e}")
@@ -108,8 +100,15 @@ class ShieldChatbot:
         
         try:
             # Send to Gemini
-            response = self.chat_session.send_message(prompt)
-            response_text = response.text
+            response = httpx.post(
+                f'https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent',
+                headers={'x-goog-api-key': self.api_key},
+                json={'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
+                      'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 1024}},
+                timeout=20)
+            response.raise_for_status()
+            response_text = ''.join(part.get('text', '') for part in
+                response.json()['candidates'][0]['content']['parts'])
             
             # Store in history
             self.conversation_history.append({
@@ -130,7 +129,7 @@ class ShieldChatbot:
             }
             
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
+            logger.error("Gemini request failed (%s)", type(e).__name__)
             return self._fallback_response(message, context)
     
     def _build_prompt(self, message: str, context: Optional[Dict[str, Any]]) -> str:
@@ -307,7 +306,7 @@ What would you like help with?"""
         """Reset the conversation history."""
         self.conversation_history = []
         if self.model:
-            self.chat_session = self.model.start_chat(history=[])
+            self.chat_session = None
         self.user_expertise_level = "beginner"
     
     def get_conversation_history(self) -> List[Dict[str, str]]:

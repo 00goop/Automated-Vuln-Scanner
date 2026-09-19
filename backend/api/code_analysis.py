@@ -6,6 +6,7 @@ import os
 import json
 import tempfile
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import logging
@@ -89,6 +90,9 @@ class CodeAnalyzer:
             # Run Bandit analysis
             result = self._run_bandit(temp_path)
             
+            if result.get('error') or result.get('fallback'):
+                return {'success': False, 'error': result.get('error', 'Full scanner unavailable'), 'findings': result.get('findings', [])}
+
             # Calculate grade
             grade_info = self._calculate_grade(result['findings'])
             
@@ -138,7 +142,7 @@ class CodeAnalyzer:
         """Run Bandit security scanner on Python file."""
         try:
             result = subprocess.run(
-                ['bandit', '-f', 'json', '-q', filepath],
+                [sys.executable, '-m', 'bandit', '-f', 'json', '-q', filepath],
                 capture_output=True,
                 text=True,
                 timeout=30
@@ -150,8 +154,11 @@ class CodeAnalyzer:
             try:
                 bandit_result = json.loads(output)
             except json.JSONDecodeError:
-                bandit_result = {'results': [], 'metrics': {}}
+                return {'error': 'Scanner returned invalid output'}
             
+            if result.returncode not in (0, 1) or bandit_result.get('errors'):
+                return {'error': 'Scanner could not complete analysis'}
+
             # Transform Bandit results to our format
             findings = []
             counts = {'high': 0, 'medium': 0, 'low': 0, 'total': 0}

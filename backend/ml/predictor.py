@@ -9,6 +9,9 @@ from typing import Dict, List, Optional, Any, Tuple
 import logging
 
 from .features import FeatureEngineer
+from .trainer import selected_features
+import json
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,7 +24,7 @@ PRIORITY_LEVELS = {
         'label': 'Critical Priority',
         'color': '#DC2626',  # Red
         'icon': '🔴',
-        'action': 'Fix immediately - high likelihood of exploitation'
+        'action': 'Fix immediately - review high-priority indicators'
     },
     'high': {
         'threshold': 0.65,
@@ -74,7 +77,14 @@ class VulnerabilityPredictor:
         scaler_path = self.model_dir / "scaler.joblib"
         importance_path = self.model_dir / "feature_importance.json"
         
-        if model_path.exists():
+        self.model_metadata = {}
+        metadata_path = self.model_dir / 'metrics.json'
+        if model_path.exists() and metadata_path.exists():
+            self.model_metadata = json.loads(metadata_path.read_text())
+            if self.model_metadata.get('feature_names') != selected_features(self.feature_engineer):
+                logger.warning('Incompatible legacy model; using heuristic fallback')
+                return
+            self.feature_engineer = FeatureEngineer(datetime.fromisoformat(self.model_metadata['as_of']))
             self.model = joblib.load(model_path)
             logger.info(f"Loaded model from {model_path}")
         else:
@@ -84,7 +94,6 @@ class VulnerabilityPredictor:
             self.scaler = joblib.load(scaler_path)
         
         if importance_path.exists():
-            import json
             with open(importance_path, 'r') as f:
                 self.feature_importance = json.load(f)
     
@@ -103,7 +112,7 @@ class VulnerabilityPredictor:
         
         # Engineer features
         df = self.feature_engineer.engineer_features([cve])
-        X = self.feature_engineer.get_feature_matrix(df)
+        X = df[selected_features(self.feature_engineer)].to_numpy(dtype=float)
         
         if self.scaler:
             X = self.scaler.transform(X)
@@ -125,7 +134,8 @@ class VulnerabilityPredictor:
             'priority_icon': priority['icon'],
             'recommended_action': priority['action'],
             'explanation': explanation,
-            'confidence': self._score_to_confidence(proba)
+            'confidence': 'Experimental score; not calibrated exploitation probability',
+            'model_mode': self.model_metadata.get('label_source', 'unknown')
         }
     
     def predict_batch(self, cves: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -181,7 +191,7 @@ class VulnerabilityPredictor:
         if cve.get('has_exploit'):
             reasons_for.append("Known exploit code exists")
         
-        cvss = cve.get('cvss_base_score', 0)
+        cvss = cve.get('cvss_base_score') or 0
         if cvss >= 9.0:
             reasons_for.append(f"Critical severity (CVSS {cvss})")
         elif cvss >= 7.0:
@@ -223,13 +233,13 @@ class VulnerabilityPredictor:
     def _generate_summary(self, proba: float, reasons: List[str]) -> str:
         """Generate a one-sentence summary."""
         if proba >= 0.85:
-            return f"This vulnerability is highly likely to be exploited. {reasons[0] if reasons else 'Multiple high-risk factors detected.'}"
+            return f"This vulnerability has a high experimental priority score. {reasons[0] if reasons else 'Multiple high-risk factors detected.'}"
         elif proba >= 0.65:
             return f"This vulnerability poses significant risk. {reasons[0] if reasons else 'Several concerning factors detected.'}"
         elif proba >= 0.40:
-            return f"This vulnerability has moderate exploitation potential. Monitor and plan remediation."
+            return f"This vulnerability has a moderate experimental priority score. Monitor and plan remediation."
         else:
-            return "This vulnerability has lower exploitation likelihood based on current indicators."
+            return "This vulnerability has a lower experimental priority score; this does not establish safety."
     
     def _explain_cwe(self, cwe_id: str) -> Optional[str]:
         """Provide human-readable CWE explanation."""
@@ -255,7 +265,7 @@ class VulnerabilityPredictor:
         top_features = []
         for i, (name, label) in enumerate(zip(feature_names, feature_labels)):
             if name in features:
-                importance = self.feature_importance.get(label, 0)
+                importance = self.feature_importance.get(name, 0)
                 if importance > 0.05:  # Only show significant features
                     top_features.append({
                         'feature': label,
@@ -270,7 +280,7 @@ class VulnerabilityPredictor:
         Fallback prediction when model isn't available.
         Uses CVSS-based heuristics.
         """
-        cvss = cve.get('cvss_base_score', 5.0) or 5.0
+        cvss = 5.0 if cve.get('cvss_base_score') is None else cve['cvss_base_score']
         
         # Simple CVSS-based scoring
         proba = min(1.0, cvss / 10.0 * 0.8)  # Scale CVSS to ~0.8 max
