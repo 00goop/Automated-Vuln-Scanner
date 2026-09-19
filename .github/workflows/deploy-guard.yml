@@ -1,0 +1,43 @@
+name: Deploy Guard
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pip-audit bandit
+      - name: Dependency audit (all advisories block)
+        id: audit
+        run: python -m pip_audit -r backend/requirements.txt --format json --output audit-results.json
+      - name: High-severity source scan
+        id: bandit
+        if: ${{ !cancelled() }}
+        run: python -m bandit -r backend/api backend/data backend/ml -lll -f json -o bandit-results.json
+      - name: Summary
+        if: always()
+        env:
+          AUDIT_STATUS: ${{ steps.audit.outcome }}
+          BANDIT_STATUS: ${{ steps.bandit.outcome }}
+        run: |
+          echo "## Security checks" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dependency audit: $AUDIT_STATUS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- High-severity source scan: $BANDIT_STATUS" >> "$GITHUB_STEP_SUMMARY"
+          echo "Any advisory, high-severity finding or scanner error fails. Deployment must require this check separately." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: '*-results.json'
+          retention-days: 7
+
