@@ -113,7 +113,7 @@ function PriorityBreakdown({ breakdown }) {
 
 
 // Dashboard View with quick access cards
-function DashboardView({ securityScore, setActiveView, connectionError, loading, vulnerabilityCount }) {
+function DashboardView({ securityScore, setActiveView, connectionError, loading, vulnerabilityCount, modelMode }) {
   const quickActions = [
     { id: 'vulnerabilities', icon: AlertTriangle, title: 'Prioritize CVEs', desc: 'Rank NVD records with inspectable context' },
     { id: 'code-analysis', icon: Code, title: 'Inspect Source', desc: 'Run Bandit-backed Python static analysis' },
@@ -138,7 +138,7 @@ function DashboardView({ securityScore, setActiveView, connectionError, loading,
           <dl>
             <div><dt>API link</dt><dd className={connectionError ? 'signal-bad' : 'signal-good'}>{connectionError ? 'offline' : loading ? 'connecting' : 'ready'}</dd></div>
             <div><dt>CVE source</dt><dd>NVD feed</dd></div>
-            <div><dt>ML mode</dt><dd>deterministic experiment</dd></div>
+            <div><dt>Scoring mode</dt><dd>{connectionError || loading ? 'unavailable' : modelMode}</dd></div>
             <div><dt>Static scan</dt><dd>Bandit</dd></div>
             <div><dt>Records loaded</dt><dd>{connectionError ? '—' : vulnerabilityCount}</dd></div>
           </dl>
@@ -193,7 +193,7 @@ function VulnerabilitiesView({ vulnerabilities }) {
                   <span className={`vuln-priority-label ${priorityClass(vulnerability.priority_level)}`}>{vulnerability.priority_level || 'Unclassified'}</span>
                 </div>
                 <p className="vuln-description">{vulnerability.description || 'No NVD description available.'}</p>
-                <div className="vuln-metadata"><span>CVSS {vulnerability.cvss_base_score ?? '—'}</span><span>MODEL {Math.round((vulnerability.exploitation_probability || 0) * 100)}%</span></div>
+                <div className="vuln-metadata"><span>CVSS {vulnerability.cvss_base_score ?? '—'}</span><span>PRIORITY {Number.isFinite(vulnerability.priority_score) ? `${Math.round(vulnerability.priority_score * 100)}/100` : 'unavailable'}</span><span>{vulnerability.model_mode ? `Experimental model: ${vulnerability.model_mode}` : 'CVSS heuristic · no ML model'}</span></div>
               </div>
             </article>
           ))}
@@ -253,7 +253,7 @@ function App() {
         <header className="workspace-heading"><div><p className="eyebrow">MR.ROBOT // {viewCode}</p><h1>{viewTitle}</h1></div><span className={`environment-label ${connectionError ? 'offline' : ''}`}><Activity size={13} />{connectionError ? 'API OFFLINE' : loading ? 'CONNECTING' : 'LOCAL / READY'}</span></header>
         {loading && <p role="status">Connecting to your security workspace…</p>}
         {connectionError && <div className="connection-notice" role="alert">The API is unavailable. Start the backend and refresh to load your data. No sample security results are displayed.</div>}
-        {activeView === 'dashboard' && <DashboardView securityScore={securityScore} setActiveView={setActiveView} connectionError={connectionError} loading={loading} vulnerabilityCount={vulnerabilities.length} />}
+        {activeView === 'dashboard' && <DashboardView securityScore={securityScore} setActiveView={setActiveView} connectionError={connectionError} loading={loading} vulnerabilityCount={vulnerabilities.length} modelMode={vulnerabilities.length ? (vulnerabilities.some(v => v.model_mode) ? 'experimental model' : 'CVSS heuristic / no model') : 'awaiting records'} />}
         {activeView === 'vulnerabilities' && <VulnerabilitiesView vulnerabilities={vulnerabilities} />}
         {activeView === 'code-analysis' && <CodeAnalysisView />}
         {activeView === 'crypto' && <CryptoToolsView />}
@@ -276,3 +276,4 @@ function App() {
 }
 
 export default App;
+
